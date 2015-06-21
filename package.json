@@ -7,5 +7,10 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "eventemitter3": "^1.1.1",
+    "socket.io": "^1.3.5",
+    "wrtc": "0.0.56"
+  }
 }
