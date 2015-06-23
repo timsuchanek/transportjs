@@ -44,8 +44,8 @@
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Transport = __webpack_require__(1);
-	var ids = __webpack_require__(2);
+	var Transport = __webpack_require__(2);
+	var ids = __webpack_require__(1);
 
 	var transport = new Transport(ids[1]);
 
@@ -69,6 +69,15 @@
 /* 1 */
 /***/ function(module, exports, __webpack_require__) {
 
+	module.exports = [
+		'E4CKnjXC1_ru4lz0Iqz_-Op68wH',
+		'CrlAkeQ9rzgbq7Kz-QWj_KLZGS0'
+	]
+
+/***/ },
+/* 2 */
+/***/ function(module, exports, __webpack_require__) {
+
 	var constants = __webpack_require__(3);
 	var webrtc = __webpack_require__(4);
 	var socket = webrtc.socket;
@@ -76,7 +85,7 @@
 	var InRequest = __webpack_require__(5)(webrtc);
 	var OutRequest = __webpack_require__(6)(webrtc);
 	var util = __webpack_require__(7);
-	var nodeUtil = __webpack_require__(10);
+	var nodeUtil = __webpack_require__(8);
 
 	function Transport(myID) {
 
@@ -238,15 +247,6 @@
 	module.exports = Transport;
 
 /***/ },
-/* 2 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = [
-		'E4CKnjXC1_ru4lz0Iqz_-Op68wH',
-		'CrlAkeQ9rzgbq7Kz-QWj_KLZGS0'
-	]
-
-/***/ },
 /* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
@@ -286,10 +286,10 @@
 	var rtc = null;
 	var constants = __webpack_require__(3);
 	var socket = __webpack_require__(12)('http://localhost:' + constants.PORT);
-	var settings = __webpack_require__(8);
+	var settings = __webpack_require__(9);
 	var EventEmitter = __webpack_require__(11);
 	var util = __webpack_require__(7);
-	var nodeUtil = __webpack_require__(10);
+	var nodeUtil = __webpack_require__(8);
 	var registered = false;
 	var NODE = false;
 
@@ -300,7 +300,7 @@
 		NODE = true;
 	} else {
 		// we're in the browser
-		rtc = __webpack_require__(9);
+		rtc = __webpack_require__(10);
 		settings = settings.browser;
 		NODE = false;
 	}
@@ -886,42 +886,6 @@
 
 /***/ },
 /* 8 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports = {
-		node: {
-			peerConnection: [
-			  { iceServers: [{url:'stun:stun.l.google.com:19302'}] },
-			  { optional: [{ DtlsSrtpKeyAgreement: true }] }
-			]
-		},
-		browser: {
-			peerConnection: {
-				config: {
-					iceServers: [{url:'stun:stun.l.google.com:19302'}],
-					connection: {
-						optional: [{ DtlsSrtpKeyAgreement: true }]
-					}
-				}
-			}
-		}
-
-	}
-
-/***/ },
-/* 9 */
-/***/ function(module, exports, __webpack_require__) {
-
-	module.exports.RTCSessionDescription = window.RTCSessionDescription ||
-		window.mozRTCSessionDescription;
-	module.exports.RTCPeerConnection = window.RTCPeerConnection ||
-		window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
-	module.exports.RTCIceCandidate = window.RTCIceCandidate ||
-		window.mozRTCIceCandidate;
-
-
-/***/ },
-/* 10 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global, process) {// Copyright Joyent, Inc. and other Node contributors.
@@ -1514,6 +1478,42 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }()), __webpack_require__(15)))
 
 /***/ },
+/* 9 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = {
+		node: {
+			peerConnection: [
+			  { iceServers: [{url:'stun:stun.l.google.com:19302'}] },
+			  { optional: [{ DtlsSrtpKeyAgreement: true }] }
+			]
+		},
+		browser: {
+			peerConnection: {
+				config: {
+					iceServers: [{url:'stun:stun.l.google.com:19302'}],
+					connection: {
+						optional: [{ DtlsSrtpKeyAgreement: true }]
+					}
+				}
+			}
+		}
+
+	}
+
+/***/ },
+/* 10 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports.RTCSessionDescription = window.RTCSessionDescription ||
+		window.mozRTCSessionDescription;
+	module.exports.RTCPeerConnection = window.RTCPeerConnection ||
+		window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
+	module.exports.RTCIceCandidate = window.RTCIceCandidate ||
+		window.mozRTCIceCandidate;
+
+
+/***/ },
 /* 11 */
 /***/ function(module, exports, __webpack_require__) {
 
@@ -2094,9 +2094,9 @@
 	 */
 
 	var url = __webpack_require__(18);
-	var eio = __webpack_require__(26);
+	var eio = __webpack_require__(25);
 	var Socket = __webpack_require__(20);
-	var Emitter = __webpack_require__(25);
+	var Emitter = __webpack_require__(26);
 	var parser = __webpack_require__(21);
 	var on = __webpack_require__(22);
 	var bind = __webpack_require__(27);
@@ -2603,7 +2603,7 @@
 	 */
 
 	var parser = __webpack_require__(21);
-	var Emitter = __webpack_require__(25);
+	var Emitter = __webpack_require__(26);
 	var toArray = __webpack_require__(31);
 	var on = __webpack_require__(22);
 	var bind = __webpack_require__(27);
@@ -2996,7 +2996,7 @@
 	var debug = __webpack_require__(23)('socket.io-parser');
 	var json = __webpack_require__(37);
 	var isArray = __webpack_require__(35);
-	var Emitter = __webpack_require__(25);
+	var Emitter = __webpack_require__(26);
 	var binary = __webpack_require__(33);
 	var isBuf = __webpack_require__(34);
 
@@ -3599,6 +3599,14 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	
+	module.exports =  __webpack_require__(36);
+
+
+/***/ },
+/* 26 */
+/***/ function(module, exports, __webpack_require__) {
+
+	
 	/**
 	 * Expose `Emitter`.
 	 */
@@ -3762,14 +3770,6 @@
 	Emitter.prototype.hasListeners = function(event){
 	  return !! this.listeners(event).length;
 	};
-
-
-/***/ },
-/* 26 */
-/***/ function(module, exports, __webpack_require__) {
-
-	
-	module.exports =  __webpack_require__(36);
 
 
 /***/ },
@@ -5158,13 +5158,13 @@
 	 */
 
 	var transports = __webpack_require__(41);
-	var Emitter = __webpack_require__(25);
+	var Emitter = __webpack_require__(26);
 	var debug = __webpack_require__(47)('engine.io-client:socket');
 	var index = __webpack_require__(29);
 	var parser = __webpack_require__(43);
-	var parseuri = __webpack_require__(46);
-	var parsejson = __webpack_require__(44);
-	var parseqs = __webpack_require__(45);
+	var parseuri = __webpack_require__(44);
+	var parsejson = __webpack_require__(45);
+	var parseqs = __webpack_require__(46);
 
 	/**
 	 * Module exports.
@@ -5870,7 +5870,7 @@
 	 */
 
 	var parser = __webpack_require__(43);
-	var Emitter = __webpack_require__(25);
+	var Emitter = __webpack_require__(26);
 
 	/**
 	 * Module exports.
@@ -6104,9 +6104,9 @@
 
 	var keys = __webpack_require__(52);
 	var hasBinary = __webpack_require__(55);
-	var sliceBuffer = __webpack_require__(57);
+	var sliceBuffer = __webpack_require__(56);
 	var base64encoder = __webpack_require__(60);
-	var after = __webpack_require__(56);
+	var after = __webpack_require__(57);
 	var utf8 = __webpack_require__(59);
 
 	/**
@@ -6699,87 +6699,6 @@
 /* 44 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(global) {/**
-	 * JSON parse.
-	 *
-	 * @see Based on jQuery#parseJSON (MIT) and JSON2
-	 * @api private
-	 */
-
-	var rvalidchars = /^[\],:{}\s]*$/;
-	var rvalidescape = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
-	var rvalidtokens = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
-	var rvalidbraces = /(?:^|:|,)(?:\s*\[)+/g;
-	var rtrimLeft = /^\s+/;
-	var rtrimRight = /\s+$/;
-
-	module.exports = function parsejson(data) {
-	  if ('string' != typeof data || !data) {
-	    return null;
-	  }
-
-	  data = data.replace(rtrimLeft, '').replace(rtrimRight, '');
-
-	  // Attempt to parse using the native JSON parser first
-	  if (global.JSON && JSON.parse) {
-	    return JSON.parse(data);
-	  }
-
-	  if (rvalidchars.test(data.replace(rvalidescape, '@')
-	      .replace(rvalidtokens, ']')
-	      .replace(rvalidbraces, ''))) {
-	    return (new Function('return ' + data))();
-	  }
-	};
-	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
-
-/***/ },
-/* 45 */
-/***/ function(module, exports, __webpack_require__) {
-
-	/**
-	 * Compiles a querystring
-	 * Returns string representation of the object
-	 *
-	 * @param {Object}
-	 * @api private
-	 */
-
-	exports.encode = function (obj) {
-	  var str = '';
-
-	  for (var i in obj) {
-	    if (obj.hasOwnProperty(i)) {
-	      if (str.length) str += '&';
-	      str += encodeURIComponent(i) + '=' + encodeURIComponent(obj[i]);
-	    }
-	  }
-
-	  return str;
-	};
-
-	/**
-	 * Parses a simple querystring into an object
-	 *
-	 * @param {String} qs
-	 * @api private
-	 */
-
-	exports.decode = function(qs){
-	  var qry = {};
-	  var pairs = qs.split('&');
-	  for (var i = 0, l = pairs.length; i < l; i++) {
-	    var pair = pairs[i].split('=');
-	    qry[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
-	  }
-	  return qry;
-	};
-
-
-/***/ },
-/* 46 */
-/***/ function(module, exports, __webpack_require__) {
-
 	/**
 	 * Parses an URI
 	 *
@@ -6818,6 +6737,87 @@
 	    }
 
 	    return uri;
+	};
+
+
+/***/ },
+/* 45 */
+/***/ function(module, exports, __webpack_require__) {
+
+	/* WEBPACK VAR INJECTION */(function(global) {/**
+	 * JSON parse.
+	 *
+	 * @see Based on jQuery#parseJSON (MIT) and JSON2
+	 * @api private
+	 */
+
+	var rvalidchars = /^[\],:{}\s]*$/;
+	var rvalidescape = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
+	var rvalidtokens = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
+	var rvalidbraces = /(?:^|:|,)(?:\s*\[)+/g;
+	var rtrimLeft = /^\s+/;
+	var rtrimRight = /\s+$/;
+
+	module.exports = function parsejson(data) {
+	  if ('string' != typeof data || !data) {
+	    return null;
+	  }
+
+	  data = data.replace(rtrimLeft, '').replace(rtrimRight, '');
+
+	  // Attempt to parse using the native JSON parser first
+	  if (global.JSON && JSON.parse) {
+	    return JSON.parse(data);
+	  }
+
+	  if (rvalidchars.test(data.replace(rvalidescape, '@')
+	      .replace(rvalidtokens, ']')
+	      .replace(rvalidbraces, ''))) {
+	    return (new Function('return ' + data))();
+	  }
+	};
+	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
+
+/***/ },
+/* 46 */
+/***/ function(module, exports, __webpack_require__) {
+
+	/**
+	 * Compiles a querystring
+	 * Returns string representation of the object
+	 *
+	 * @param {Object}
+	 * @api private
+	 */
+
+	exports.encode = function (obj) {
+	  var str = '';
+
+	  for (var i in obj) {
+	    if (obj.hasOwnProperty(i)) {
+	      if (str.length) str += '&';
+	      str += encodeURIComponent(i) + '=' + encodeURIComponent(obj[i]);
+	    }
+	  }
+
+	  return str;
+	};
+
+	/**
+	 * Parses a simple querystring into an object
+	 *
+	 * @param {String} qs
+	 * @api private
+	 */
+
+	exports.decode = function(qs){
+	  var qry = {};
+	  var pairs = qs.split('&');
+	  for (var i = 0, l = pairs.length; i < l; i++) {
+	    var pair = pairs[i].split('=');
+	    qry[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
+	  }
+	  return qry;
 	};
 
 
@@ -7026,7 +7026,7 @@
 
 	var XMLHttpRequest = __webpack_require__(48);
 	var Polling = __webpack_require__(54);
-	var Emitter = __webpack_require__(25);
+	var Emitter = __webpack_require__(26);
 	var inherit = __webpack_require__(62);
 	var debug = __webpack_require__(47)('engine.io-client:polling-xhr');
 
@@ -7657,7 +7657,7 @@
 
 	var Transport = __webpack_require__(40);
 	var parser = __webpack_require__(43);
-	var parseqs = __webpack_require__(45);
+	var parseqs = __webpack_require__(46);
 	var inherit = __webpack_require__(62);
 	var debug = __webpack_require__(47)('engine.io-client:websocket');
 
@@ -8128,7 +8128,7 @@
 	 */
 
 	var Transport = __webpack_require__(40);
-	var parseqs = __webpack_require__(45);
+	var parseqs = __webpack_require__(46);
 	var parser = __webpack_require__(43);
 	var inherit = __webpack_require__(62);
 	var debug = __webpack_require__(47)('engine.io-client:polling');
@@ -8439,40 +8439,6 @@
 /* 56 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = after
-
-	function after(count, callback, err_cb) {
-	    var bail = false
-	    err_cb = err_cb || noop
-	    proxy.count = count
-
-	    return (count === 0) ? callback() : proxy
-
-	    function proxy(err, result) {
-	        if (proxy.count <= 0) {
-	            throw new Error('after called too many times')
-	        }
-	        --proxy.count
-
-	        // after first error, rest are passed to err_cb
-	        if (err) {
-	            bail = true
-	            callback(err)
-	            // future error callbacks will go to error handler
-	            callback = err_cb
-	        } else if (proxy.count === 0 && !bail) {
-	            callback(null, result)
-	        }
-	    }
-	}
-
-	function noop() {}
-
-
-/***/ },
-/* 57 */
-/***/ function(module, exports, __webpack_require__) {
-
 	/**
 	 * An abstraction for slicing an arraybuffer even when
 	 * ArrayBuffer.prototype.slice is not supported
@@ -8502,6 +8468,40 @@
 	  }
 	  return result.buffer;
 	};
+
+
+/***/ },
+/* 57 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = after
+
+	function after(count, callback, err_cb) {
+	    var bail = false
+	    err_cb = err_cb || noop
+	    proxy.count = count
+
+	    return (count === 0) ? callback() : proxy
+
+	    function proxy(err, result) {
+	        if (proxy.count <= 0) {
+	            throw new Error('after called too many times')
+	        }
+	        --proxy.count
+
+	        // after first error, rest are passed to err_cb
+	        if (err) {
+	            bail = true
+	            callback(err)
+	            // future error callbacks will go to error handler
+	            callback = err_cb
+	        } else if (proxy.count === 0 && !bail) {
+	            callback(null, result)
+	        }
+	    }
+	}
+
+	function noop() {}
 
 
 /***/ },

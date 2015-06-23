@@ -1,6 +1,6 @@
 var Server = require('socket.io');
-var constants = require('./constants');
-var util = require('./util');
+var constants = require('./lib/constants');
+var util = require('./lib/util');
 
 var io = new Server();
 
@@ -93,10 +93,3 @@ io.on('connection', function(socket) {
 });
 
 io.listen(constants.PORT);
-
-
-/**
- * io.emit               -> An Alle.
- * socket.emit           -> Nur an socket
- * socket.broadcast.emit -> An Alle außer socket
- */

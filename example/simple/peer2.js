@@ -1,4 +1,4 @@
-var Transport = require('../../index');
+var Transport = require('../../lib/index');
 var ids = require('./ids');
 
 var transport = new Transport(ids[1]);
