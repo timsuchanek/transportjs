@@ -84,7 +84,7 @@ http://localhost:8000/index1.html
 
 ### both
 Of course Node and Browser work together, too.
-You can combine index1 with peer2 or index2 with peer1.
+You can combine `index1` with `peer2` or `index2` with `peer1`.
 
 # License
 MIT
