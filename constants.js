@@ -4,11 +4,18 @@ module.exports = {
   STORE_TIMEOUT: 1000,
   FIND_NODE_TIMEOUT: 1000,
   FIND_VALUE_TIMEOUT: 1000,
+
+  TIMEOUT: 5000,
+
   HOST: 'localhost',
   HOST_PORT: 9000,
 
+  PORT: 3000,
+
   // Kademlia Config
   HASH_SPACE: 160,
+  B64_LENGTH: 27,
+
   K: 8,
   CONCURRENCY_FACTOR: 3,
 

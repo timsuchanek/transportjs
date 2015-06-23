@@ -1,3 +1,6 @@
+var constants = require('./constants');
+
+
 String.prototype.map = function() {
   return Array.prototype.map.apply(this, arguments).join('');
 }
@@ -98,9 +101,17 @@ function b64ToBinary(n) {
     throw new TypeError('the input argument `n` is not a string.');
   }
 
-  return n.map(function(digit) {
+  var result = n.map(function(digit) {
     return prefixWithZeroes(ALPHABET.indexOf(digit).toString(2));
   });
+
+  // IMPORTANT!!!
+  // If the ID Space is eg. 8, then 4 leading zeroes are generated!
+  // If its 160, 2 leading zeroes are generated.
+
+  var padding = 6 - (constants.HASH_SPACE % 6);
+
+  return result.substring(padding, result.length);
 }
 
 
@@ -149,8 +160,8 @@ var commonPrefix = function(idB64, binaryPrefix) {
   return idBin.commonPrefix(binaryPrefix);
 }
 
-var getRandomID = function(bits) {
-  return binaryToB64(getRandomBinarySequence(bits))
+var getRandomID = function() {
+  return binaryToB64(getRandomBinarySequence(constants.HASH_SPACE));
 }
 
 /**
@@ -187,3 +198,4 @@ module.exports.b64ToBinary = b64ToBinary;
 module.exports.sortByDistance = sortByDistance;
 
 module.exports.getRandomID = getRandomID;
+

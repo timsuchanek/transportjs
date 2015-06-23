@@ -1,7 +1,7 @@
 {
-  "name": "transport.js",
+  "name": "transportjs",
   "version": "0.0.5",
-  "description": "This is an alternative Approach to PeerJS and only focused on Data Channels.",
+  "description": "Alternative to Peer.js, works on Node and Browser, Superagent-like API",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
