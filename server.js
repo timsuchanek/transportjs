@@ -90,6 +90,19 @@ io.on('connection', function(socket) {
 		delete peers[socket.id];
 		console.log(Object.keys(peers).length + ' peers still online');
 	});
+
+	socket.on('bootstrap', function() {
+		var peerIDs = Object.keys(peers).map(function(key) {
+			return peers[key].kademliaID;
+		})
+		.filter(function(id) {
+			return id !== null;
+		});
+
+		console.log('send  bootstrap peers', peerIDs);
+
+		socket.emit('bootstrap', peerIDs);
+	});
 });
 
 io.listen(constants.PORT);
