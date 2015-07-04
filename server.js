@@ -22,15 +22,22 @@ var _getPeer = function(peerID) {
 
 };
 
+var _getOnlinePeers = function() {
+	return peers.filter(function(peer) {
+		return peer.online === true;
+	}).length;
+};
+
 io.on('connection', function(socket) {
 
 	console.log('Socket ', socket.id, 'connected');
 
-	console.log(Object.keys(peers).length + ' peers online');
+	console.log(_getOnlinePeers() + ' peers online');
 
 	peers[socket.id] = {
 		socket: socket,
-		kademliaID: null
+		kademliaID: null,
+		online: true
 	};
 
 	socket.on('register', function(data) {
@@ -86,11 +93,17 @@ io.on('connection', function(socket) {
 		}
 	});
 
+	socket.on('connect', function() {
+		peers[socket.id].online = true;
+		console.log('Socket ', peers[socket.id].kademliaID, 'disconnected');
+		peers[socket.id].online = false;
+		console.log(_getOnlinePeers() + ' peers online');
+	})
 
 	socket.on('disconnect', function(K) {
 		console.log('Socket ', peers[socket.id].kademliaID, 'disconnected');
-		delete peers[socket.id];
-		console.log(Object.keys(peers).length + ' peers online');
+		peers[socket.id].online = false;
+		console.log(_getOnlinePeers() + ' peers online');
 	});
 
 	socket.on('error', function(err) {
