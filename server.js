@@ -115,7 +115,7 @@ io.on('connection', function(socket) {
 	socket.on('bootstrap', function() {
 		var peerIDs = Object.keys(peers).filter(function(key) {
 			return peers[key].online === true;
-		}).peer.map(function(key) {
+		}).map(function(key) {
 			return peers[key].kademliaID;
 		})
 		.filter(function(id) {
