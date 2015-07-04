@@ -92,6 +92,7 @@ io.on('connection', function(socket) {
 	});
 
 	socket.on('error', function(err) {
+		err = err.stack ? err.stack : err;
 		console.log(peers[socket.id].kademliaID, 'makes some trouble :/', err);
 	});
 
