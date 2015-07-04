@@ -26,6 +26,8 @@ io.on('connection', function(socket) {
 
 	console.log('Socket ', socket.id, 'connected');
 
+	console.log(Object.keys(peers).length + ' peers online');
+
 	peers[socket.id] = {
 		socket: socket,
 		kademliaID: null
@@ -86,9 +88,9 @@ io.on('connection', function(socket) {
 
 
 	socket.on('disconnect', function(K) {
-		console.log('Socket ', peers[socket.id].kademliaID, 'disconnect :/');
+		console.log('Socket ', peers[socket.id].kademliaID, 'disconnected');
 		delete peers[socket.id];
-		console.log(Object.keys(peers).length + ' peers still online');
+		console.log(Object.keys(peers).length + ' peers online');
 	});
 
 	socket.on('error', function(err) {
