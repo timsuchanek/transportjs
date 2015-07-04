@@ -86,9 +86,13 @@ io.on('connection', function(socket) {
 
 
 	socket.on('disconnect', function(K) {
-		console.log('Socket ', socket.id, 'disconnect :/');
+		console.log('Socket ', peers[socket.id].kademliaID, 'disconnect :/');
 		delete peers[socket.id];
 		console.log(Object.keys(peers).length + ' peers still online');
+	});
+
+	socket.on('error', function(err) {
+		console.log(peers[socket.id].kademliaID, 'makes some trouble :/', err);
 	});
 
 	socket.on('bootstrap', function() {
