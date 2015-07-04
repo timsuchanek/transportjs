@@ -23,7 +23,8 @@ var _getPeer = function(peerID) {
 };
 
 var _getOnlinePeers = function() {
-	return peers.filter(function(peer) {
+	return Object.keys(peers).filter(function(key) {
+		var peer = peers[key];
 		return peer.online === true;
 	}).length;
 };
@@ -112,7 +113,9 @@ io.on('connection', function(socket) {
 	});
 
 	socket.on('bootstrap', function() {
-		var peerIDs = Object.keys(peers).map(function(key) {
+		var peerIDs = Object.keys(peers).filter(function(key) {
+			return peers[key].online === true;
+		}).peer.map(function(key) {
 			return peers[key].kademliaID;
 		})
 		.filter(function(id) {
