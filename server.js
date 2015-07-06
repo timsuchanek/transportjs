@@ -22,6 +22,22 @@ var _getPeer = function(peerID) {
 
 };
 
+var _getSocketID = function(peerID) {
+
+	if (peerID === null) return null;
+
+	var fittingPeers = Object.keys(peers).filter(function(peer) {
+		return peers[peer].kademliaID === peerID;
+	});
+
+	if (fittingPeers.length > 0) {
+		return fittingPeers[0];
+	} else {
+		return null;
+	}
+
+}
+
 var _getOnlinePeers = function() {
 	return Object.keys(peers).filter(function(key) {
 		var peer = peers[key];
@@ -41,11 +57,30 @@ io.on('connection', function(socket) {
 		online: true
 	};
 
-	socket.on('register', function(data) {
-		console.log('received register', data);
-		if (util.b64ToBinary(data).length === constants.HASH_SPACE) {
-			peers[socket.id].kademliaID = data;
+	socket.on('register', function(id) {
+		console.log('received register', id);
+		if (util.b64ToBinary(id).length === constants.HASH_SPACE) {
+
+			// check, if that kademliaID is already present on an offline socket
+
+			var peer = _getPeer(id) || null;
+			var socketID = _getSocketID(id) || null;
+
+			if (peer !== null) {
+				if (peer.online === true) {
+					return;
+				}
+
+				// remove the offline peer, because it would cause conflicts
+				delete peers[socketID];
+				console.log('removed old socket');
+
+			}
+
+			peers[socket.id].kademliaID = id;
+
 		} else {
+			console.log('Got invalid id :/ The length doesnt match to the HASH SPACE');
 			socket.emit('register', 'Your ID is not valid.');
 		}
 	});
@@ -57,12 +92,21 @@ io.on('connection', function(socket) {
 
 		if (peerID !== null && offer !== null) {
 
-			var peer = _getPeer(peerID);
+			var peer = _getPeer(peerID) || null;
+
+			debugger
+
+			if (peer === null) {
+				console.log(socket.id + ' wants to connect to a peer that doesnt exist: ' + peerID);
+				return;
+			}
+
 			var kademliaID = peers[socket.id].kademliaID;
 
 			console.log('received offer from', kademliaID, 'to', peerID);
 
 			console.log('sending offer to', peerID);
+
 
 			peer.socket.emit('offer', {
 				peerID: kademliaID,
@@ -109,7 +153,7 @@ io.on('connection', function(socket) {
 
 	socket.on('error', function(err) {
 		err = err.stack ? err.stack : err;
-		console.log(peers[socket.id].kademliaID, 'makes some trouble :/', err);
+		console.log(socket.id, 'makes some trouble :/', err);
 	});
 
 	socket.on('bootstrap', function() {
@@ -127,5 +171,7 @@ io.on('connection', function(socket) {
 		socket.emit('bootstrap', peerIDs);
 	});
 });
+
+console.log('Server Running at port ' + constants.PORT);
 
 io.listen(constants.PORT);
