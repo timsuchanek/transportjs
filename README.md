@@ -2,6 +2,11 @@ transport.js
 ============
 transport.js is a WebRTC DataChannel Library that is designed for building p2p networks.
 
+## Ubuntu
+```
+sudo apt-get install -y build-essential g++ pkg-config python2.7 git-all pkg-config libncurses5-dev libssl-dev libnss3-dev libexpat-dev
+```
+
 ## Usage
 ```
 $ npm install --save transportjs
