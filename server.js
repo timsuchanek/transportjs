@@ -166,7 +166,7 @@ io.on('connection', function(socket) {
 			return id !== null;
 		});
 
-		console.log('send  bootstrap peers', peerIDs);
+		// console.log('send  bootstrap peers', peerIDs);
 
 		socket.emit('bootstrap', peerIDs);
 	});
