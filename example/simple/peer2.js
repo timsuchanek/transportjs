@@ -8,6 +8,7 @@ var messageCount = 0;
 transport.on('request', function(req) {
 
 	messageCount++;
+	console.log('peer2: Got request', req.data);
 
 	req.respond()
 	.payload({'Hallo': 'Zu®uck.'})

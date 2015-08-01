@@ -47,9 +47,9 @@ var _getOnlinePeers = function() {
 
 io.on('connection', function(socket) {
 
-	console.log('Socket ', socket.id, 'connected');
+	// console.log('Socket ', socket.id, 'connected');
 
-	console.log(_getOnlinePeers() + ' peers online');
+	// console.log(_getOnlinePeers() + ' peers online');
 
 	peers[socket.id] = {
 		socket: socket,
@@ -58,7 +58,7 @@ io.on('connection', function(socket) {
 	};
 
 	socket.on('register', function(id) {
-		console.log('received register', id);
+		// console.log('received register', id);
 		if (util.b64ToBinary(id).length === constants.HASH_SPACE) {
 
 			// check, if that kademliaID is already present on an offline socket
@@ -73,14 +73,14 @@ io.on('connection', function(socket) {
 
 				// remove the offline peer, because it would cause conflicts
 				delete peers[socketID];
-				console.log('removed old socket');
+				// console.log('removed old socket');
 
 			}
 
 			peers[socket.id].kademliaID = id;
 
 		} else {
-			console.log('Got invalid id :/ The length doesnt match to the HASH SPACE');
+			// console.log('Got invalid id :/ The length doesnt match to the HASH SPACE');
 			socket.emit('register', 'Your ID is not valid.');
 		}
 	});
@@ -94,18 +94,17 @@ io.on('connection', function(socket) {
 
 			var peer = _getPeer(peerID) || null;
 
-			debugger
 
 			if (peer === null) {
-				console.log(socket.id + ' wants to connect to a peer that doesnt exist: ' + peerID);
+				// console.log(socket.id + ' wants to connect to a peer that doesnt exist: ' + peerID);
 				return;
 			}
 
 			var kademliaID = peers[socket.id].kademliaID;
 
-			console.log('received offer from', kademliaID, 'to', peerID);
+			// console.log('received offer from', kademliaID, 'to', peerID);
 
-			console.log('sending offer to', peerID);
+			// console.log('sending offer to', peerID);
 
 
 			peer.socket.emit('offer', {
@@ -114,7 +113,7 @@ io.on('connection', function(socket) {
 			});
 
 		} else {
-			console.log('Receiving Offer failed');
+			// console.log('Receiving Offer failed');
 		}
 	});
 
@@ -126,34 +125,54 @@ io.on('connection', function(socket) {
 			var peer = _getPeer(peerID);
 			var kademliaID = peers[socket.id].kademliaID;
 
-			console.log('received answer from', kademliaID, 'to', peerID);
+			// console.log('received answer from', kademliaID, 'to', peerID);
 
-			console.log('sending answer from', kademliaID, 'to', peerID);
+			// console.log('sending answer from', kademliaID, 'to', peerID);
 			peer.socket.emit('answer', {
 				peerID: kademliaID,
 				answer: answer
 			});
 		} else {
-			console.log('Receiving Answer failed');
+			// console.log('Receiving Answer failed');
+		}
+	});
+
+	socket.on('trickle', function(data) {
+		var peerID = data.peerID || null;
+		var candidate  = data.candidate  || null;
+
+		if (peerID !== null && candidate !== null) {
+			var peer = _getPeer(peerID);
+			var kademliaID = peers[socket.id].kademliaID;
+
+			// console.log('received trickle from', kademliaID, 'to', peerID);
+
+			// console.log('sending trickle from', kademliaID, 'to', peerID);
+			peer.socket.emit('trickle', {
+				peerID: kademliaID,
+				candidate: candidate
+			});
+		} else {
+			// console.log('Receiving Answer failed');
 		}
 	});
 
 	socket.on('connect', function() {
 		peers[socket.id].online = true;
-		console.log('Socket ', peers[socket.id].kademliaID, 'disconnected');
+		// console.log('Socket ', peers[socket.id].kademliaID, 'disconnected');
 		peers[socket.id].online = false;
-		console.log(_getOnlinePeers() + ' peers online');
+		// console.log(_getOnlinePeers() + ' peers online');
 	})
 
 	socket.on('disconnect', function(K) {
-		console.log('Socket ', peers[socket.id].kademliaID, 'disconnected');
+		// console.log('Socket ', peers[socket.id].kademliaID, 'disconnected');
 		peers[socket.id].online = false;
-		console.log(_getOnlinePeers() + ' peers online');
+		// console.log(_getOnlinePeers() + ' peers online');
 	});
 
 	socket.on('error', function(err) {
 		err = err.stack ? err.stack : err;
-		console.log(socket.id, 'makes some trouble :/', err);
+		// console.log(socket.id, 'makes some trouble :/', err);
 	});
 
 	socket.on('bootstrap', function() {
