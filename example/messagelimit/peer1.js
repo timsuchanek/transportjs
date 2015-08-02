@@ -26,7 +26,7 @@ transport
 
 		transport
 			.send(ids[1])
-			.payload({garbage)
+			.payload(garbage)
 			.scope(this)
 			.then(function success(res, rtt) {
 
