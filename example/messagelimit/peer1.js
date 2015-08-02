@@ -13,18 +13,30 @@ if (process.argv.length > 2) {
 	}
 }
 
-var garbage = util.randomGarbage(n * 1024 * 1024);
+var garbage = util.randomGarbage(n * 1024);
 
 
 transport
 	.send(ids[1])
-	.payload(garbage)
+	.payload({
+		'hallo': 'yeay'
+	})
 	.scope(this)
-	.then(function success(res, rtt) {
+	.then(function success(res) {
 
-		console.log('Yes! Got a response!',
-			res, 'It took ' + rtt + 'ms for the first time');
+		transport
+			.send(ids[1])
+			.payload({garbage)
+			.scope(this)
+			.then(function success(res, rtt) {
 
+				console.log('Yes! Got a response!',
+					res, 'It took ' + rtt + 'ms for the second time');
+
+
+			}, function fail(err) {
+				console.log('errör1', err);
+			});
 
 	}, function fail(err) {
 		console.log('errör1', err);
