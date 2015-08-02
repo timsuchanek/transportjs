@@ -4,11 +4,16 @@ var util      = require('../../lib/util');
 
 var transport = new Transport(ids[0]);
 
-var garbage = util.randomGarbage(10 * 1000 * 1000);
+var n = 1;
 
+if (process.argv.length > 2) {
+	var x = parseInt(process.agrv[2], 10);
+	if (!isNaN(x)) {
+		n = x;
+	}
+}
 
-var data = 'Lorem ipsum dolor sit amet, consectetur adipisicing elit. Modi nesciunt ex vitae natus ducimus nulla quo sunt exercitationem, illum. Ipsam itaque hic dolor, odio accusantium omnis recusandae repudiandae rerum nihil.';
-
+var garbage = util.randomGarbage(n * 1024 * 1024);
 
 
 transport
