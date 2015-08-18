@@ -8,7 +8,7 @@ var util = require('./util');
 var nodeUtil = require('util');
 
 
-var logging = require('logging').transportjs.index;
+var logging = false;
 
 var monsole = {};
 if (logging === false) {
