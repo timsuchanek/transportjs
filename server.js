@@ -1,6 +1,6 @@
 var Server = require('socket.io');
-var constants = require('./lib/constants');
-var util = require('./lib/util');
+var constants = require('./src/constants');
+var util = require('./src/util');
 
 var io = new Server();
 

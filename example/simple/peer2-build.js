@@ -54,6 +54,7 @@
 	transport.on('request', function(req) {
 
 		messageCount++;
+		console.log('peer2: Got request', req.data);
 
 		req.respond()
 		.payload({'Hallo': 'Zu®uck.'})
@@ -70,8 +71,9 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = [
-		'E4CKnjXC1_ru4lz0Iqz_-Op68wH',
-		'CrlAkeQ9rzgbq7Kz-QWj_KLZGS0'
+		'5JVPLzZFa4YJ7uar-wP3rdkwVwS8yKSL',
+		'j8Z119f55UuAb5d9_e_MCWANO_hXPAkm',
+		'_4-5Y_znuM3A8jgCsTdRhct4FdfiuhMn'
 	]
 
 /***/ },
@@ -87,10 +89,141 @@
 	var util = __webpack_require__(7);
 	var nodeUtil = __webpack_require__(8);
 
-	function Transport(myID) {
+
+	var logging = __webpack_require__(12).transportjs.index;
+
+	var monsole = {};
+	if (logging === false) {
+		monsole.log = monsole.trace = function() {};
+	} else {
+		monsole.log = console.log.bind(console);
+		monsole.trace = console.trace.bind(console);
+	}
+
+	var CHUNKS = {};
+
+
+	function _handleMessage(peerID, data) {
+
+
+		var requestID = data.substring(0, constants.B64_LENGTH);
+		var pipe      = data.substr(constants.B64_LENGTH, 1);
+		var payload   = data.substring(constants.B64_LENGTH + 1, data.length);
+
+		// console.log('incoming reqID', requestID);
+
+		try {
+			payload = JSON.parse(payload);
+		} catch (e) {
+			payload = null;
+		}
+
+
+		if (pipe === '|') {
+
+			var outRequest = this.outRequests[peerID] && this.outRequests[peerID][requestID];
+
+			if (outRequest === null) {
+
+				// Timeout over. Just ignore
+
+			} else if (outRequest) {
+
+				outRequest.success(payload);
+
+				// remove outRequest from pending queue
+				this.outRequests[peerID][requestID] = null;
+
+			} else {
+				var request = this.createInRequest(peerID, requestID, payload);
+				this.emit('request', request);
+			}
+
+		} else {
+
+			var err = new Error("Can't identify message. Found " + pipe + ' instead of |');
+			console.trace(err, data.length);
+		}
+
+	}
+
+	function _receiveChunk(peerID, data, connection) {
+
+		var cb = data.substring(0, 2);
+
+
+		// we MUST NOT be chunking AND the chunking symbols must be here
+		if (!connection.chunking && cb === 'cb') {
+
+			var rest = data.substring(3, data.length);
+			var pipeIndex = rest.indexOf('|');
+			var sizeString = rest.substring(0, pipeIndex);
+			var size = parseInt(sizeString, 10);
+			var data = rest.substring(pipeIndex + 1, rest.length);
+
+
+
+			if (isNaN(size)) {
+				console.trace('Invalid chunk size', sizeString, data, connection.chunking, cb);
+				console.trace('Instead we now use the normal _handleMessage');
+				// throw new Error('We HAVE to stop here!');
+				//console.trace('Maybe this isnt a chunk. Lets call the normal _handleMessage');
+				return _handleMessage.call(this, peerID, data);
+			} else {
+			  console.log(this.myID.substr(this.myID.length - 2) + ': YES. Now expecting ' + size + ' bytes!');
+			}
+
+			CHUNKS[peerID] = {
+				size: size,
+				data: data
+			};
+
+			connection.chunking = true;
+
+		} else if (connection.chunking) {
+
+			var chunk = CHUNKS[peerID];
+
+			var newLength = data.length + chunk.data.length;
+
+			// if we didn't reach the max size, we're not finished
+			if (newLength < chunk.size) {
+				chunk.data += data;
+			// successfully chunked :-)
+			} else if (newLength === chunk.size) {
+
+				connection.chunking = false;
+				chunk.data += data;
+
+				_handleMessage.call(this, peerID, chunk.data);
+
+				chunk.data = null;
+
+			} else {
+				var err = new Error('We got more data (' + newLength + ' byte) in the last message than expected (' + chunk.size + ' byte)');
+				console.trace(err);
+
+			}
+
+
+
+
+		} else {
+			var err = new Error("Chunking not possible, got cb=", cb, 'but chunking=', connection.chunking);
+			console.trace(err);
+		}
+
+
+	}
+
+
+	function Transport(myID, trickle) {
+
+		myID = myID || null;
 
 		this.connections = {};
-		this.myID        = myID;
+		this.myID        = myID || util.getRandomID();
+		this.trickle     = typeof trickle === 'boolean' ? trickle : true;
 
 		/**
 		 * inRequests and outRequests have the following structure: {
@@ -106,105 +239,157 @@
 
 		EventEmitter.call(this);
 
-		socket.emit('register', this.myID);
+		socket.on('connect', function() {
+			// monsole.log('connected to socket server');
+			socket.emit('register', this.myID);
+		}.bind(this));
 
-		console.log('Connected to the socket, registered as ' + this.myID);
+		socket.on('disconnect', function() {
+			monsole.log('disconnected from socket server');
+		});
+
+
+
+
+		// monsole.log('Connected to the socket, registered as ' + this.myID);
 
 		socket.on('offer', function(data) {
-			var peerID = data.peerID;
+			var peerID = typeof data.peerID === 'string' ? data.peerID : null;
+			if (peerID === null) {
+				throw new Error("peerID is not a string");
+			}
 			var offer  = data.offer;
 
-			console.log('Received offfaa from', peerID);
+			// monsole.log('Received offfaa from', peerID);
 
-			var connection = new webrtc.Connection(peerID, offer);
+			if (this.connections[peerID] && this.connections[peerID] !== null) {
+				// console.log(this.connections[peerID].peerConnection.);
+				var inRequests = this.inRequests[peerID];
+				if (inRequests && typeof inRequests !== 'undefined') {
+					if (typeof inRequests === 'object') {
+						var numRunning = Object.keys(inRequests).filter(function(key) {
+							return !!inRequests[key];
+						}).length;
+						if (numRunning > 0) {
+							inRequests = true
+						} else {
+							inRequests = false;
+						}
+					}
+				} else {
+					inRequests = false;
+				}
+
+				var outRequests = this.outRequests[peerID];
+				if (outRequests && typeof outRequests !== 'undefined') {
+					if (typeof outRequests === 'object') {
+						var numRunning = Object.keys(outRequests).filter(function(key) {
+							return !!outRequests[key];
+						}).length;
+						if (numRunning > 0) {
+							outRequests = true
+						} else {
+							outRequests = false;
+						}
+					}
+				} else {
+					outRequests = false;
+				}
+
+
+				if (inRequests || outRequests) {
+					console.log('throwing offer away');
+					return;
+				}
+
+				console.log('Creating new connection');
+
+			}
+
+			var connection = new webrtc.Connection(peerID, offer, this.trickle);
 			this.connections[peerID] = connection;
 
 			connection.on('message', function(data) {
-				this.receive(peerID, data);
+				this.receive(peerID, data, connection);
 			}.bind(this));
 
 			connection.on('close', function() {
-				// delete connections[]
-			});
+				console.log('closed');
+				delete this.connections[peerID];
+			}.bind(this));
 
 
 		}.bind(this));
+
+		socket.on('error', function(err) {
+			monsole.trace('Error with socket', err);
+		});
 	}
 
 	nodeUtil.inherits(Transport, EventEmitter);
 
+	Transport.prototype.bootstrap = function(cb, scope) {
+		var called = false;
+		socket.emit('bootstrap', "");
+
+		socket.on('bootstrap', function(peers) {
+			if (!called) {
+				cb.call(scope, peers);
+				called = true;
+			}
+		})
+	}
+
 	Transport.prototype.send = function(id) {
+		if (typeof id !== 'string') {
+			throw new Error('Invalid peer id', id);
+		}
 		return this.createOutRequest(id);
 	};
 
-	Transport.prototype.receive = function(peerID, data) {
+	Transport.prototype.receive = function(peerID, data, connection) {
 		// VERY IMPORTANT. FIRST: Look, if this message doesn't belong to
 		// any request, we've already send.
 
 		// DEBUG!!!
 
-		var requestID = data.substring(0, constants.B64_LENGTH);
-		var pipe      = data.substr(constants.B64_LENGTH, 1);
-		var payload   = data.substring(constants.B64_LENGTH + 1, data.length);
+		var chunk = data.substring(0, 2);
 
-		try {
-			payload = JSON.parse(payload);
-		} catch (e) {
-			payload = null;
-		}
-
-
-		if (pipe === '|') {
-
-			var outRequest = this.outRequests[peerID] && this.outRequests[peerID][requestID];
-
-			if (outRequest) {
-
-				outRequest.success(payload);
-
-				// remove outRequest from pending queue
-				delete this.outRequests[peerID][requestID];
-
-			} else {
-				var request = this.createInRequest(peerID, requestID, payload);
-				this.emit('request', request);
-			}
-
+		if (chunk === 'cb' || connection.chunking) {
+			// console.log(chunk, connection.chunking);
+			_receiveChunk.call(this, peerID, data, connection);
 		} else {
-			throw new Error("Can't identify message. Found " + pipe + ' instead of |');
+			_handleMessage.call(this, peerID, data);
 		}
 
 	};
 
 	Transport.prototype.createOutRequest = function(id) {
 
+		// console.log('create out request');
+
 		if (!this.outRequests[id]) {
 			this.outRequests[id] = {};
 		}
 
-		var request = new OutRequest(id, this);
+		var request = new OutRequest(id, this, null, this.trickle);
+
 
 		var requests = this.outRequests[id];
 		requests[request.requestID] = request;
+
+		request.on('done', function() {
+			requests[request.requestID] = null;
+		}.bind(this));
 
 		return request;
 
 	};
 
-	Transport.prototype.removeOutRequest = function(peerID, request) {
-
-		var requests = this.outRequests[peerID];
-		var requestID = request.requestID;
-
-		if (requests) {
-			if (requests[requestID]) {
-				delete requests[requestID];
-			}
-		}
-
-	};
 
 	Transport.prototype.createInRequest = function(peerID, requestID, payload) {
+
+		// console.log('create in request');
 
 		if (!this.inRequests[peerID]) {
 			this.inRequests[peerID] = {};
@@ -215,22 +400,15 @@
 		var requests = this.inRequests[peerID];
 		requests[requestID] = request;
 
+
+		request.on('done', function() {
+			requests[requestID] = null;
+		}.bind(this));
+
 		return request;
 
 	};
 
-	Transport.prototype.removeInRequest = function(peerID, request) {
-
-		var requests = this.inRequests[peerID];
-		var requestID = request.requestID;
-
-		if (requests) {
-			if (requests[requestID]) {
-				delete requests[requestID];
-			}
-		}
-
-	};
 
 
 
@@ -246,27 +424,23 @@
 
 	module.exports = Transport;
 
+
 /***/ },
 /* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = {
 	  // Network Config
-	  PING_TIMEOUT: 1000,
-	  STORE_TIMEOUT: 1000,
-	  FIND_NODE_TIMEOUT: 1000,
-	  FIND_VALUE_TIMEOUT: 1000,
 
 	  TIMEOUT: 5000,
 
-	  HOST: 'localhost',
-	  HOST_PORT: 9000,
-
+	  HOST: '52.17.22.6',
+	  // HOST: 'localhost',
 	  PORT: 3000,
 
 	  // Kademlia Config
-	  HASH_SPACE: 160,
-	  B64_LENGTH: 27,
+	  HASH_SPACE: 192,
+	  B64_LENGTH: 32,
 
 	  K: 8,
 	  CONCURRENCY_FACTOR: 3,
@@ -276,8 +450,35 @@
 	  LOG_STORE: true,
 	  LOG_FIND_VALUE: true,
 	  LOG_FIND_NODE: true,
-	  LOG_PEERJS: true
+	  LOG_PEERJS: true,
+
+	  // reference peer.js
+	  MTU: 16200,
+
+	  RPCS: {
+	    PING_REQ: 10000,
+	    PING_RES: 10001,
+
+	    FIND_NODE_REQ: 10002,
+	    FIND_NODE_RES: 10003,
+
+	    FIND_VALUE_REQ: 10004,
+	    FIND_VALUE_RES: 10005,
+
+	    STORE_REQ: 10006,
+	    STORE_RES: 10007,
+
+	    NODE_LOOKUP_REQ: 10008,
+	    NODE_LOOKUP_RES: 10009,
+
+	    VALUE_LOOKUP_REQ: 10010,
+	    VALUE_LOOKUP_RES: 10011,
+
+	    BULK_STORE_REQ: 10012,
+	    BULK_STORE_RES: 10013
+	  },
 	}
+
 
 /***/ },
 /* 4 */
@@ -285,7 +486,9 @@
 
 	var rtc = null;
 	var constants = __webpack_require__(3);
-	var socket = __webpack_require__(12)('http://localhost:' + constants.PORT);
+
+	var serverURL = 'http://' + constants.HOST + ':' + constants.PORT;
+	var socket = __webpack_require__(13)(serverURL);
 	var settings = __webpack_require__(9);
 	var EventEmitter = __webpack_require__(11);
 	var util = __webpack_require__(7);
@@ -293,9 +496,21 @@
 	var registered = false;
 	var NODE = false;
 
+
+	var logging = __webpack_require__(12).transportjs.webrtc;
+
+	var monsole = {};
+	if (logging === false) {
+		monsole.log = monsole.trace = function() {};
+	} else {
+		monsole.log = console.log.bind(console);
+		monsole.trace = console.trace.bind(console);
+	}
+
+
 	if (typeof window === 'undefined') {
 		// we're in NODE.
-		rtc = __webpack_require__(13);
+		rtc = __webpack_require__(14);
 		settings = settings.node;
 		NODE = true;
 	} else {
@@ -308,17 +523,23 @@
 	var _handleSDP = function() {
 		// if there is no offer, we want to create it!
 
+		if (this.sdpSend) {
+			return;
+		}
+
+		this.sdpSend = true;
+
 		var sdp = this.peerConnection.localDescription;
 
 
 		if (!this.offerData) {
-			console.log('sending my offer now', this.peerID);
+			// monsole.log('sending my offer now', this.peerID);
 			socket.emit('offer', {
 				peerID: this.peerID,
 				offer: sdp
 			});
 		} else {
-			console.log('sending my answer now', this.peerID);
+			// monsole.log('sending my answer now', this.peerID);
 			socket.emit('answer', {
 				peerID: this.peerID,
 				answer: sdp
@@ -326,13 +547,21 @@
 		}
 	};
 
+	var _sendCandidate = function(candidate) {
+		// console.log('sending candidate', candidate);
+		socket.emit('trickle', {
+			peerID: this.peerID,
+			candidate: candidate
+		});
+	}
+
 	var _handleAnswer = function(answer) {
 		this.answer = new rtc.RTCSessionDescription(answer);
 		this.peerConnection.setRemoteDescription(this.answer,
 			function success() {
-				console.log('set answer successfully');
+				// monsole.log('set answer successfully');
 			}, function fail(err) {
-				console.log('error while setting answer');
+				// monsole.log('error while setting answer');
 			});
 	};
 
@@ -346,10 +575,11 @@
 	var _setChannelListeners = function() {
 
 		this.channel.onopen = function () {
-			console.log('channel open');
+			// console.log('channel open');
 			this.emit('ready');
 
 			while(this.pendingPayloads.length > 0) {
+				// console.log('sending pendingPayloads');
 				var payload = this.pendingPayloads.shift();
 				this.channel.send(payload);
 			}
@@ -358,26 +588,40 @@
 
 		this.channel.onmessage = function(event) {
 			var data = event.data;
+			// console.log('dada');
 			this.emit('message', data);
+			// monsole.log('Received message with', data.length, ' bytes');
 		}.bind(this);
 
 		this.channel.onerror = function(err) {
 			console.log('Error on the Channel: ', err);
 		};
 
+		this.channel.onclose = function(e) {
+			this.emit('close');
+		}.bind(this);
+
 	};
 
-	function Connection(peerID, offerData) {
+	function Connection(peerID, offerData, trickle) {
 
-		this.offerData      = offerData || null;
-		this.offer          = null;
-		this.answer         = null;
-		this.peerConnection = null;
-		this.channel        = null;
-		this.myOffer        = null;
-		this.myAnswer       = null;
-		this.pendingPayloads          = [];
-		this.peerID         = peerID;
+		this.offerData       = offerData || null;
+		this.offer           = null;
+		this.answer          = null;
+		this.peerConnection  = null;
+		this.channel         = {};
+		this.myOffer         = null;
+		this.myAnswer        = null;
+		this.pendingPayloads = [];
+		this.peerID          = peerID;
+		this.chunking        = false;
+		this.trickle         = typeof trickle === 'boolean' ? trickle : true;
+		this.sdpSend         = false;
+
+		if (typeof peerID !== 'string') {
+			// debugger
+			throw new Error('invalid peer id');
+		}
 		this.channelID      = util.getRandomID();
 
 		if (this.offerData) {
@@ -391,46 +635,69 @@
 		}
 
 
-		console.log('created new peerConnection');
+		// monsole.log('created new peerConnection');
 
-		this.peerConnection.onicecandidate = function(candidate) {
 
-			// if trickling is over
-			if (candidate.candidate == null) {
-				_handleSDP.call(this, peerID);
+		this.peerConnection.onicecandidate = function(event) {
+
+
+			if (event.candidate === null && !this.trickling) {
+
+				_handleSDP.call(this);
+
+			} else {
+
+				_sendCandidate.call(this, event.candidate);
+
 			}
+
+
 
 		}.bind(this);
 
+		this.peerConnection.ongatheringchange = function(e) {
+			if (e.currentTarget && e.currentTarget.iceGatheringState === 'complete') {
+				// console.log('gather');
+	      _handleSDP.call(this);
+	    }
+		}.bind(this);
+
+		var self = this;
+
 		this.peerConnection.ondatachannel = function(event) {
-			console.log('got data channel');
+
 			this.channel = event.channel;
 
 			_setChannelListeners.call(this)
 
 		}.bind(this);
 
-		this.peerConnection.onsignalingstatechange = function(state) {
-			console.log('signalingstatechange', state);
+		this.peerConnection.onsignalingstatechange = function(event) {
+			// monsole.log('signalingstatechange', state);
 		};
 
-		this.peerConnection.oniceconnectionstatechange = function(state) {
-			console.log('iceconnectionsstatechange', state);
-		};
+		this.peerConnection.oniceconnectionstatechange = function(event) {
+			var state = this.peerConnection.iceConnectionState;
+			if (state === 'disconnected') {
+				this.emit('close');
+			}
+		}.bind(this);
 
-		this.peerConnection.onicegatheringstatechange = function(state) {
-			console.log('icegatheringstatechange', state);
+		this.peerConnection.onicegatheringstatechange = function(event) {
+			// monsole.log('icegatheringstatechange', state);
 		};
 
 		if (this.offerData) {
-			console.log('jo, we have an offer');
+			// monsole.log('jo, we have an offer');
 			this.peerConnection.setRemoteDescription(this.offer, function success() {
-				console.log('setRemoteDescription was successfull');
+				// monsole.log('setRemoteDescription was successfull');
 				this.peerConnection.createAnswer(function success(answer) {
 					this.myAnswer = answer;
 					this.peerConnection.setLocalDescription(answer, undefined, function(err) {
-						console.log('Error with setLocalDescription in the Incoming Case: ', err);
-					});
+						if (this.trickle) {
+							_handleSDP.call(this);
+						}
+					}.bind(this));
 				}.bind(this), function fail() {
 					// log fail
 				});
@@ -438,17 +705,19 @@
 				// log fail
 			});
 		} else {
-			console.log('there is not offa');
+			// console.log('i am the babo');
 
-			this.channel = this.peerConnection.createDataChannel(this.channelID, { reliable: true });
+			this.channel = this.peerConnection.createDataChannel(this.channelID, { reliable: true, ordered: true });
 
 			_setChannelListeners.call(this);
 
 			this.peerConnection.createOffer(function (desc) {
-				console.log('we have a local desc', desc);
+				// monsole.log('we have a local desc', desc);
 				this.peerConnection.setLocalDescription(desc, function() {
-					console.log('and set it');
-				});
+					if (this.trickle) {
+						_handleSDP.call(this);
+					}
+				}.bind(this));
 			}.bind(this));
 		}
 
@@ -458,10 +727,30 @@
 
 
 			if (this.peerID === peerID) {
-				console.log('Received Answaaa', peerID);
+				// monsole.log('Received Answaaa', peerID);
 				_handleAnswer.call(this, answer);
 			}
 		}.bind(this));
+
+		socket.on('trickle', function(data) {
+			var peerID = data.peerID;
+			var candidate = data.candidate;
+
+
+			if (this.peerID === peerID) {
+				// monsole.log('Received Answaaa', peerID);
+				// console.log('Adding candidate', candidate);
+				this.peerConnection.addIceCandidate(new rtc.RTCIceCandidate(candidate));
+
+			}
+
+		}.bind(this));
+
+
+		Object.observe(this.channel, function(changes) {
+			// console.log('change of this.channel', changes, this.channel);
+		});
+
 
 		EventEmitter.call(this);
 	}
@@ -470,9 +759,17 @@
 
 	Connection.prototype.send = function(payload) {
 
+		// monsole.log('sending', ' (' + payload.length + ' bytes) to', this.peerID);
+
 		if (this.channel && this.channel.readyState === 'open') {
+			// console.log('already sending', payload);
 			this.channel.send(payload);
 		} else {
+
+			// console.log('queueing', payload, this.channel);
+
+			// console.log(this);
+
 			this.pendingPayloads.push(payload);
 		}
 
@@ -482,18 +779,42 @@
 	module.exports.register   = register;
 	module.exports.Connection = Connection;
 
+
 /***/ },
 /* 5 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var constants = __webpack_require__(3);
 	var util = __webpack_require__(7);
+	var EventEmitter = __webpack_require__(11);
+	var nodeUtil = __webpack_require__(8);
+
+	var logging = __webpack_require__(12).transportjs.InRequest;
+
+	var monsole = {};
+	if (logging === false) {
+		monsole.log = monsole.trace = function() {};
+	} else {
+		monsole.log = console.log.bind(console);
+		monsole.trace = console.trace.bind(console);
+	}
+
 
 	module.exports = function(webrtc) {
 
 		var _send = function(connection, payload, id) {
+
 			var data = id + '|' + payload;
-			connection.send(data);
+			if (data.length < constants.MTU) {
+				connection.send(data);
+			} else {
+				// chunk data and send chunks
+				var chunks = util.chunkData(data);
+				chunks.forEach(function(chunk) {
+					connection.send(chunk);
+				});
+			}
+
 		};
 
 		var _respond = function() {
@@ -502,26 +823,34 @@
 
 			if (connection) {
 				_send.call(this, connection, this.__payload, this.requestID);
+				// if we could send the message, it's done.
+
+				this.success(this.__payload);
+
 			} else {
 				//log
 			}
 
 		};
 
-		function InRequest(peerID, requestID, payload, transport, timeout) {
+		function InRequest(peerID, requestID, data, transport) {
 
 			this.peerID          = peerID;
 			this.requestID       = requestID;
-			this.__payload       = payload;
+			// this.data is the data that came in
+			this.data            = data;
+			// this.__payload is our answer we want to send
+			this.__payload       = null;
 			this.transport       = transport;
 			this.responding      = false;
 			this.finished        = false;
 			this.successFunction = null;
 			this.failFunction    = null;
 			this.__scope         = this;
-			this.timeout         = !isNaN(timeout) || constants.TIMEOUT;
 
 		}
+
+		nodeUtil.inherits(InRequest, EventEmitter);
 
 		InRequest.prototype.respond = function() {
 			this.responding = true;
@@ -550,6 +879,8 @@
 					this.successFunction.call(this.__scope, payload, rtt);
 				}
 
+				this.emit('done');
+
 			} else {
 				// log
 			}
@@ -577,12 +908,37 @@
 
 	var constants = __webpack_require__(3);
 	var util  = __webpack_require__(7);
+	var nodeUtil = __webpack_require__(8);
+	var EventEmitter = __webpack_require__(11);
+
+	var logging = __webpack_require__(12).transportjs.OutRequest;
+
+	var monsole = {};
+	if (logging === false) {
+		monsole.log = monsole.trace = function() {};
+	} else {
+		monsole.log = console.log.bind(console);
+		monsole.trace = console.trace.bind(console);
+	}
+
 
 	module.exports = function(webrtc) {
 
 		var _send = function(connection, payload, id) {
+
+			// monsole.log('Sending', util.rpcToString(payload), JSON.parse(payload), 'to', this.peerID);
+
+
 			var data = id + '|' + payload;
-			connection.send(data);
+			if (data.length < constants.MTU) {
+				connection.send(data);
+			} else {
+				// chunk data and send chunks
+				var chunks = util.chunkData(data);
+				chunks.forEach(function(chunk) {
+					connection.send(chunk);
+				});
+			}
 		};
 
 		var _request = function() {
@@ -599,10 +955,10 @@
 				 * }
 				 */
 
-				connections[this.peerID] = connection = new webrtc.Connection(this.peerID);
+				connections[this.peerID] = connection = new webrtc.Connection(this.peerID, null, this.trickle);
 
 				connection.on('message', function(data) {
-					this.transport.receive(this.peerID, data);
+					this.transport.receive(this.peerID, data, connection);
 				}.bind(this));
 
 				connection.on('close', function() {
@@ -616,7 +972,8 @@
 		}
 
 
-		function OutRequest(peerID, transport, timeout) {
+		function OutRequest(peerID, transport, timeout, trickle) {
+
 			this.requestID       = util.getRandomID();
 			this.peerID          = peerID;
 			this.__payload       = null;
@@ -624,19 +981,14 @@
 			this.successFunction = null;
 			this.failFunction    = null;
 			this.finished        = false;
-			this.__scope           = this;
+			this.__scope         = this;
 			this.begin           = Date.now();
-			this.timeout         = !isNaN(timeout) || constants.TIMEOUT;
+			this.trickle         = typeof trickle === 'boolean' ? trickle : true;
+			this.__timeout       = !isNaN(timeout) && typeof timeout === 'number' ? timeout : constants.TIMEOUT;
 
-			setTimeout(function() {
-				if (!this.finished) {
-					this.finished = true;
-					this.failFunction.call(this, {
-						error: 'Timeout: ' + constants.TIMEOUT + 'ms over.'
-					});
-				}
-			}.bind(this), this.timeout);
 		}
+
+		nodeUtil.inherits(OutRequest, EventEmitter);
 
 		OutRequest.prototype.success = function(payload) {
 
@@ -650,6 +1002,8 @@
 					this.successFunction.call(this.__scope, payload, rtt);
 				}
 
+				this.emit('done');
+
 			} else {
 				// log
 			}
@@ -658,6 +1012,13 @@
 
 		OutRequest.prototype.scope   = function(scope) {
 			this.__scope = scope;
+			return this;
+		}
+
+
+		OutRequest.prototype.timeout   = function(timeout) {
+			timeout = typeof timeout === 'number' ? timeout : 1000;
+			this.__timeout = timeout;
 			return this;
 		}
 
@@ -672,6 +1033,16 @@
 
 			// make the request.
 			_request.call(this);
+
+
+			setTimeout(function() {
+				if (!this.finished) {
+					this.finished = true;
+					this.failFunction.call(this, new Error('Timeout: ' + this.__timeout + 'ms over.'));
+					this.emit('done');
+				}
+			}.bind(this), this.__timeout);
+
 		};
 
 		return OutRequest;
@@ -682,6 +1053,18 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	var constants = __webpack_require__(3);
+
+
+
+	var logging = __webpack_require__(12).transportjs.util;
+
+	var monsole = {};
+	if (logging === false) {
+		monsole.log = monsole.trace = function() {};
+	} else {
+		monsole.log = console.log.bind(console);
+		monsole.trace = console.trace.bind(console);
+	}
 
 
 	String.prototype.map = function() {
@@ -792,7 +1175,13 @@
 	  // If the ID Space is eg. 8, then 4 leading zeroes are generated!
 	  // If its 160, 2 leading zeroes are generated.
 
+
+
 	  var padding = 6 - (constants.HASH_SPACE % 6);
+
+	  if (constants.HASH_SPACE % 6 === 0) {
+	  	padding = padding - 6;
+	  }
 
 	  return result.substring(padding, result.length);
 	}
@@ -861,6 +1250,82 @@
 	}
 
 
+
+	function randomInt(min, max) {
+		return Math.floor(Math.random() * (max - min + 1)) + min;
+	}
+
+	function randomGarbage(n) {
+		var str = '';
+		var min = 0;
+		var max = ALPHABET.length - 1;
+
+
+		for (var i = 0; i < n; i++) {
+			str += ALPHABET[randomInt(min, max)];
+		}
+
+		return str;
+	}
+
+	function chunkData(data) {
+
+
+		var length = data.length;
+		var mtu = constants.MTU;
+
+		if (length < mtu) {
+			return [data];
+		}
+
+		var n = Math.ceil(length / mtu);
+		var chunks = [];
+
+
+
+		for (var i = 0; i < n; i++) {
+
+			var chunk = '';
+			var max = (i + 1) * mtu < length ? mtu : length - (i * mtu);
+			var chunkData = data.substr(i * mtu, max);
+
+			if (i === 0) {
+				chunk += 'cb|' + length + '|';
+			} else {
+				// chunk += '|' + i + '|';
+			}
+
+			chunk += chunkData;
+
+			chunks.push(chunk);
+
+		}
+
+		return chunks;
+
+	}
+
+
+	function _getRPC(n, RPCS) {
+		var rpcs = Object.keys(RPCS);
+
+		var rpc = rpcs.filter(function(key) {
+			var value = RPCS[key];
+			return value === n;
+		});
+
+		return rpc.length > 0 ? rpc[0] : null;
+
+	}
+
+	function rpcToString(payload) {
+		payload = typeof payload === 'object' ? payload : JSON.parse(payload);
+
+		var rpc = _getRPC(payload.rpc, constants.RPCS);
+
+		return rpc;
+	}
+
 	/**
 	 * Binary API
 	 */
@@ -881,8 +1346,9 @@
 	module.exports.sortByDistance = sortByDistance;
 
 	module.exports.getRandomID = getRandomID;
-
-
+	module.exports.randomGarbage = randomGarbage;
+	module.exports.chunkData = chunkData;
+	module.exports.rpcToString = rpcToString;
 
 /***/ },
 /* 8 */
@@ -1413,7 +1879,7 @@
 	}
 	exports.isPrimitive = isPrimitive;
 
-	exports.isBuffer = __webpack_require__(14);
+	exports.isBuffer = __webpack_require__(15);
 
 	function objectToString(o) {
 	  return Object.prototype.toString.call(o);
@@ -1457,7 +1923,7 @@
 	 *     prototype.
 	 * @param {function} superCtor Constructor function to inherit prototype from.
 	 */
-	exports.inherits = __webpack_require__(17);
+	exports.inherits = __webpack_require__(18);
 
 	exports._extend = function(origin, add) {
 	  // Don't do anything if add isn't an object
@@ -1475,7 +1941,7 @@
 	  return Object.prototype.hasOwnProperty.call(obj, prop);
 	}
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }()), __webpack_require__(15)))
+	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }()), __webpack_require__(16)))
 
 /***/ },
 /* 9 */
@@ -1785,12 +2251,42 @@
 /* 12 */
 /***/ function(module, exports, __webpack_require__) {
 
-	
-	module.exports = __webpack_require__(16);
+	module.exports = {
 
+		webrtcKademlia: {
+			KRequester: true,
+			KResponder: false,
+			Kademlia: false,
+			util: false,
+			Storage: false,
+			RoutingTable: false,
+			KBucket: false
+		},
+
+		transportjs: {
+			index: true,
+			InRequest: true,
+			OutRequest: true,
+			util: true,
+			webrtc: true
+		},
+
+		dlsh: {
+			index: true,
+			LSHFamily: true
+		}
+	};
 
 /***/ },
 /* 13 */
+/***/ function(module, exports, __webpack_require__) {
+
+	
+	module.exports = __webpack_require__(17);
+
+
+/***/ },
+/* 14 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var RTCIceCandidate       = window.mozRTCIceCandidate       || window.webkitRTCIceCandidate       || window.RTCIceCandidate;
@@ -1803,7 +2299,7 @@
 
 
 /***/ },
-/* 14 */
+/* 15 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = function isBuffer(arg) {
@@ -1814,7 +2310,7 @@
 	}
 
 /***/ },
-/* 15 */
+/* 16 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// shim for using process in browser
@@ -1883,7 +2379,7 @@
 
 
 /***/ },
-/* 16 */
+/* 17 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -1891,10 +2387,10 @@
 	 * Module dependencies.
 	 */
 
-	var url = __webpack_require__(18);
-	var parser = __webpack_require__(21);
-	var Manager = __webpack_require__(19);
-	var debug = __webpack_require__(23)('socket.io-client');
+	var url = __webpack_require__(19);
+	var parser = __webpack_require__(22);
+	var Manager = __webpack_require__(20);
+	var debug = __webpack_require__(24)('socket.io-client');
 
 	/**
 	 * Module exports.
@@ -1971,12 +2467,12 @@
 	 * @api public
 	 */
 
-	exports.Manager = __webpack_require__(19);
-	exports.Socket = __webpack_require__(20);
+	exports.Manager = __webpack_require__(20);
+	exports.Socket = __webpack_require__(21);
 
 
 /***/ },
-/* 17 */
+/* 18 */
 /***/ function(module, exports, __webpack_require__) {
 
 	if (typeof Object.create === 'function') {
@@ -2005,7 +2501,7 @@
 
 
 /***/ },
-/* 18 */
+/* 19 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {
@@ -2013,8 +2509,8 @@
 	 * Module dependencies.
 	 */
 
-	var parseuri = __webpack_require__(24);
-	var debug = __webpack_require__(23)('socket.io-client:url');
+	var parseuri = __webpack_require__(25);
+	var debug = __webpack_require__(24)('socket.io-client:url');
 
 	/**
 	 * Module exports.
@@ -2085,7 +2581,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 19 */
+/* 20 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -2093,17 +2589,17 @@
 	 * Module dependencies.
 	 */
 
-	var url = __webpack_require__(18);
-	var eio = __webpack_require__(25);
-	var Socket = __webpack_require__(20);
-	var Emitter = __webpack_require__(26);
-	var parser = __webpack_require__(21);
-	var on = __webpack_require__(22);
-	var bind = __webpack_require__(27);
-	var object = __webpack_require__(28);
-	var debug = __webpack_require__(23)('socket.io-client:manager');
-	var indexOf = __webpack_require__(29);
-	var Backoff = __webpack_require__(30);
+	var url = __webpack_require__(19);
+	var eio = __webpack_require__(26);
+	var Socket = __webpack_require__(21);
+	var Emitter = __webpack_require__(27);
+	var parser = __webpack_require__(22);
+	var on = __webpack_require__(23);
+	var bind = __webpack_require__(28);
+	var object = __webpack_require__(29);
+	var debug = __webpack_require__(24)('socket.io-client:manager');
+	var indexOf = __webpack_require__(30);
+	var Backoff = __webpack_require__(31);
 
 	/**
 	 * Module exports
@@ -2594,7 +3090,7 @@
 
 
 /***/ },
-/* 20 */
+/* 21 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -2602,13 +3098,13 @@
 	 * Module dependencies.
 	 */
 
-	var parser = __webpack_require__(21);
-	var Emitter = __webpack_require__(26);
-	var toArray = __webpack_require__(31);
-	var on = __webpack_require__(22);
-	var bind = __webpack_require__(27);
-	var debug = __webpack_require__(23)('socket.io-client:socket');
-	var hasBin = __webpack_require__(32);
+	var parser = __webpack_require__(22);
+	var Emitter = __webpack_require__(27);
+	var toArray = __webpack_require__(32);
+	var on = __webpack_require__(23);
+	var bind = __webpack_require__(28);
+	var debug = __webpack_require__(24)('socket.io-client:socket');
+	var hasBin = __webpack_require__(33);
 
 	/**
 	 * Module exports.
@@ -2985,7 +3481,7 @@
 
 
 /***/ },
-/* 21 */
+/* 22 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -2993,12 +3489,12 @@
 	 * Module dependencies.
 	 */
 
-	var debug = __webpack_require__(23)('socket.io-parser');
-	var json = __webpack_require__(37);
-	var isArray = __webpack_require__(35);
-	var Emitter = __webpack_require__(26);
-	var binary = __webpack_require__(33);
-	var isBuf = __webpack_require__(34);
+	var debug = __webpack_require__(24)('socket.io-parser');
+	var json = __webpack_require__(38);
+	var isArray = __webpack_require__(36);
+	var Emitter = __webpack_require__(27);
+	var binary = __webpack_require__(34);
+	var isBuf = __webpack_require__(35);
 
 	/**
 	 * Protocol version.
@@ -3391,7 +3887,7 @@
 
 
 /***/ },
-/* 22 */
+/* 23 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -3421,7 +3917,7 @@
 
 
 /***/ },
-/* 23 */
+/* 24 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -3564,7 +4060,7 @@
 
 
 /***/ },
-/* 24 */
+/* 25 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -3595,15 +4091,15 @@
 
 
 /***/ },
-/* 25 */
+/* 26 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	module.exports =  __webpack_require__(36);
+	module.exports =  __webpack_require__(37);
 
 
 /***/ },
-/* 26 */
+/* 27 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -3773,7 +4269,7 @@
 
 
 /***/ },
-/* 27 */
+/* 28 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -3802,7 +4298,7 @@
 
 
 /***/ },
-/* 28 */
+/* 29 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -3891,7 +4387,7 @@
 	};
 
 /***/ },
-/* 29 */
+/* 30 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -3906,7 +4402,7 @@
 	};
 
 /***/ },
-/* 30 */
+/* 31 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -3997,7 +4493,7 @@
 
 
 /***/ },
-/* 31 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = toArray
@@ -4016,7 +4512,7 @@
 
 
 /***/ },
-/* 32 */
+/* 33 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {
@@ -4024,7 +4520,7 @@
 	 * Module requirements.
 	 */
 
-	var isArray = __webpack_require__(38);
+	var isArray = __webpack_require__(39);
 
 	/**
 	 * Module exports.
@@ -4081,7 +4577,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 33 */
+/* 34 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {/*global Blob,File*/
@@ -4090,8 +4586,8 @@
 	 * Module requirements
 	 */
 
-	var isArray = __webpack_require__(35);
-	var isBuf = __webpack_require__(34);
+	var isArray = __webpack_require__(36);
+	var isBuf = __webpack_require__(35);
 
 	/**
 	 * Replaces every Buffer | ArrayBuffer in packet with a numbered placeholder.
@@ -4229,7 +4725,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 34 */
+/* 35 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {
@@ -4249,7 +4745,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 35 */
+/* 36 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = Array.isArray || function (arr) {
@@ -4258,11 +4754,11 @@
 
 
 /***/ },
-/* 36 */
+/* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
-	module.exports = __webpack_require__(39);
+	module.exports = __webpack_require__(40);
 
 	/**
 	 * Exports parser
@@ -4270,11 +4766,11 @@
 	 * @api public
 	 *
 	 */
-	module.exports.parser = __webpack_require__(43);
+	module.exports.parser = __webpack_require__(44);
 
 
 /***/ },
-/* 37 */
+/* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/*! JSON v3.2.6 | http://bestiejs.github.io/json3 | Copyright 2012-2013, Kit Cambridge | http://kit.mit-license.org */
@@ -4284,7 +4780,7 @@
 
 	  // Detect the `define` function exposed by asynchronous module loaders. The
 	  // strict `define` check is necessary for compatibility with `r.js`.
-	  var isLoader = "function" === "function" && __webpack_require__(42);
+	  var isLoader = "function" === "function" && __webpack_require__(43);
 
 	  // Detect native implementations.
 	  var nativeJSON = typeof JSON == "object" && JSON;
@@ -5141,7 +5637,7 @@
 
 
 /***/ },
-/* 38 */
+/* 39 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = Array.isArray || function (arr) {
@@ -5150,21 +5646,21 @@
 
 
 /***/ },
-/* 39 */
+/* 40 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {/**
 	 * Module dependencies.
 	 */
 
-	var transports = __webpack_require__(41);
-	var Emitter = __webpack_require__(26);
-	var debug = __webpack_require__(47)('engine.io-client:socket');
-	var index = __webpack_require__(29);
-	var parser = __webpack_require__(43);
-	var parseuri = __webpack_require__(44);
-	var parsejson = __webpack_require__(45);
-	var parseqs = __webpack_require__(46);
+	var transports = __webpack_require__(42);
+	var Emitter = __webpack_require__(27);
+	var debug = __webpack_require__(48)('engine.io-client:socket');
+	var index = __webpack_require__(30);
+	var parser = __webpack_require__(44);
+	var parseuri = __webpack_require__(45);
+	var parsejson = __webpack_require__(46);
+	var parseqs = __webpack_require__(47);
 
 	/**
 	 * Module exports.
@@ -5279,9 +5775,9 @@
 	 */
 
 	Socket.Socket = Socket;
-	Socket.Transport = __webpack_require__(40);
-	Socket.transports = __webpack_require__(41);
-	Socket.parser = __webpack_require__(43);
+	Socket.Transport = __webpack_require__(41);
+	Socket.transports = __webpack_require__(42);
+	Socket.parser = __webpack_require__(44);
 
 	/**
 	 * Creates transport of the given type.
@@ -5862,15 +6358,15 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 40 */
+/* 41 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
 	 * Module dependencies.
 	 */
 
-	var parser = __webpack_require__(43);
-	var Emitter = __webpack_require__(26);
+	var parser = __webpack_require__(44);
+	var Emitter = __webpack_require__(27);
 
 	/**
 	 * Module exports.
@@ -6027,17 +6523,17 @@
 
 
 /***/ },
-/* 41 */
+/* 42 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {/**
 	 * Module dependencies
 	 */
 
-	var XMLHttpRequest = __webpack_require__(48);
-	var XHR = __webpack_require__(49);
-	var JSONP = __webpack_require__(50);
-	var websocket = __webpack_require__(51);
+	var XMLHttpRequest = __webpack_require__(49);
+	var XHR = __webpack_require__(50);
+	var JSONP = __webpack_require__(51);
+	var websocket = __webpack_require__(52);
 
 	/**
 	 * Export transports.
@@ -6087,7 +6583,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 42 */
+/* 43 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(__webpack_amd_options__) {module.exports = __webpack_amd_options__;
@@ -6095,19 +6591,19 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, {}))
 
 /***/ },
-/* 43 */
+/* 44 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {/**
 	 * Module dependencies.
 	 */
 
-	var keys = __webpack_require__(52);
-	var hasBinary = __webpack_require__(55);
+	var keys = __webpack_require__(53);
+	var hasBinary = __webpack_require__(57);
 	var sliceBuffer = __webpack_require__(56);
-	var base64encoder = __webpack_require__(60);
-	var after = __webpack_require__(57);
-	var utf8 = __webpack_require__(59);
+	var base64encoder = __webpack_require__(61);
+	var after = __webpack_require__(58);
+	var utf8 = __webpack_require__(60);
 
 	/**
 	 * Check if we are running an android browser. That requires us to use
@@ -6164,7 +6660,7 @@
 	 * Create a blob api even for blob builder when vendor prefixes exist
 	 */
 
-	var Blob = __webpack_require__(58);
+	var Blob = __webpack_require__(59);
 
 	/**
 	 * Encodes a packet.
@@ -6696,7 +7192,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 44 */
+/* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -6741,7 +7237,7 @@
 
 
 /***/ },
-/* 45 */
+/* 46 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {/**
@@ -6779,7 +7275,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 46 */
+/* 47 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -6822,7 +7318,7 @@
 
 
 /***/ },
-/* 47 */
+/* 48 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -6832,7 +7328,7 @@
 	 * Expose `debug()` as the module.
 	 */
 
-	exports = module.exports = __webpack_require__(53);
+	exports = module.exports = __webpack_require__(54);
 	exports.log = log;
 	exports.formatArgs = formatArgs;
 	exports.save = save;
@@ -6975,11 +7471,11 @@
 
 
 /***/ },
-/* 48 */
+/* 49 */
 /***/ function(module, exports, __webpack_require__) {
 
 	// browser shim for xmlhttprequest module
-	var hasCORS = __webpack_require__(61);
+	var hasCORS = __webpack_require__(62);
 
 	module.exports = function(opts) {
 	  var xdomain = opts.xdomain;
@@ -7017,18 +7513,18 @@
 
 
 /***/ },
-/* 49 */
+/* 50 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {/**
 	 * Module requirements.
 	 */
 
-	var XMLHttpRequest = __webpack_require__(48);
-	var Polling = __webpack_require__(54);
-	var Emitter = __webpack_require__(26);
-	var inherit = __webpack_require__(62);
-	var debug = __webpack_require__(47)('engine.io-client:polling-xhr');
+	var XMLHttpRequest = __webpack_require__(49);
+	var Polling = __webpack_require__(55);
+	var Emitter = __webpack_require__(27);
+	var inherit = __webpack_require__(63);
+	var debug = __webpack_require__(48)('engine.io-client:polling-xhr');
 
 	/**
 	 * Module exports.
@@ -7408,7 +7904,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 50 */
+/* 51 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {
@@ -7416,8 +7912,8 @@
 	 * Module requirements.
 	 */
 
-	var Polling = __webpack_require__(54);
-	var inherit = __webpack_require__(62);
+	var Polling = __webpack_require__(55);
+	var inherit = __webpack_require__(63);
 
 	/**
 	 * Module exports.
@@ -7648,18 +8144,18 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 51 */
+/* 52 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
 	 * Module dependencies.
 	 */
 
-	var Transport = __webpack_require__(40);
-	var parser = __webpack_require__(43);
-	var parseqs = __webpack_require__(46);
-	var inherit = __webpack_require__(62);
-	var debug = __webpack_require__(47)('engine.io-client:websocket');
+	var Transport = __webpack_require__(41);
+	var parser = __webpack_require__(44);
+	var parseqs = __webpack_require__(47);
+	var inherit = __webpack_require__(63);
+	var debug = __webpack_require__(48)('engine.io-client:websocket');
 
 	/**
 	 * `ws` exposes a WebSocket-compatible interface in
@@ -7667,7 +8163,7 @@
 	 * in the browser.
 	 */
 
-	var WebSocket = __webpack_require__(63);
+	var WebSocket = __webpack_require__(64);
 
 	/**
 	 * Module exports.
@@ -7892,7 +8388,7 @@
 
 
 /***/ },
-/* 52 */
+/* 53 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -7917,7 +8413,7 @@
 
 
 /***/ },
-/* 53 */
+/* 54 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -7933,7 +8429,7 @@
 	exports.disable = disable;
 	exports.enable = enable;
 	exports.enabled = enabled;
-	exports.humanize = __webpack_require__(65);
+	exports.humanize = __webpack_require__(66);
 
 	/**
 	 * The currently active debug mode names, and names to skip.
@@ -8120,18 +8616,18 @@
 
 
 /***/ },
-/* 54 */
+/* 55 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
 	 * Module dependencies.
 	 */
 
-	var Transport = __webpack_require__(40);
-	var parseqs = __webpack_require__(46);
-	var parser = __webpack_require__(43);
-	var inherit = __webpack_require__(62);
-	var debug = __webpack_require__(47)('engine.io-client:polling');
+	var Transport = __webpack_require__(41);
+	var parseqs = __webpack_require__(47);
+	var parser = __webpack_require__(44);
+	var inherit = __webpack_require__(63);
+	var debug = __webpack_require__(48)('engine.io-client:polling');
 
 	/**
 	 * Module exports.
@@ -8144,7 +8640,7 @@
 	 */
 
 	var hasXHR2 = (function() {
-	  var XMLHttpRequest = __webpack_require__(48);
+	  var XMLHttpRequest = __webpack_require__(49);
 	  var xhr = new XMLHttpRequest({ xdomain: false });
 	  return null != xhr.responseType;
 	})();
@@ -8371,7 +8867,42 @@
 
 
 /***/ },
-/* 55 */
+/* 56 */
+/***/ function(module, exports, __webpack_require__) {
+
+	/**
+	 * An abstraction for slicing an arraybuffer even when
+	 * ArrayBuffer.prototype.slice is not supported
+	 *
+	 * @api public
+	 */
+
+	module.exports = function(arraybuffer, start, end) {
+	  var bytes = arraybuffer.byteLength;
+	  start = start || 0;
+	  end = end || bytes;
+
+	  if (arraybuffer.slice) { return arraybuffer.slice(start, end); }
+
+	  if (start < 0) { start += bytes; }
+	  if (end < 0) { end += bytes; }
+	  if (end > bytes) { end = bytes; }
+
+	  if (start >= bytes || start >= end || bytes === 0) {
+	    return new ArrayBuffer(0);
+	  }
+
+	  var abv = new Uint8Array(arraybuffer);
+	  var result = new Uint8Array(end - start);
+	  for (var i = start, ii = 0; i < end; i++, ii++) {
+	    result[ii] = abv[i];
+	  }
+	  return result.buffer;
+	};
+
+
+/***/ },
+/* 57 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {
@@ -8379,7 +8910,7 @@
 	 * Module requirements.
 	 */
 
-	var isArray = __webpack_require__(66);
+	var isArray = __webpack_require__(67);
 
 	/**
 	 * Module exports.
@@ -8436,42 +8967,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 56 */
-/***/ function(module, exports, __webpack_require__) {
-
-	/**
-	 * An abstraction for slicing an arraybuffer even when
-	 * ArrayBuffer.prototype.slice is not supported
-	 *
-	 * @api public
-	 */
-
-	module.exports = function(arraybuffer, start, end) {
-	  var bytes = arraybuffer.byteLength;
-	  start = start || 0;
-	  end = end || bytes;
-
-	  if (arraybuffer.slice) { return arraybuffer.slice(start, end); }
-
-	  if (start < 0) { start += bytes; }
-	  if (end < 0) { end += bytes; }
-	  if (end > bytes) { end = bytes; }
-
-	  if (start >= bytes || start >= end || bytes === 0) {
-	    return new ArrayBuffer(0);
-	  }
-
-	  var abv = new Uint8Array(arraybuffer);
-	  var result = new Uint8Array(end - start);
-	  for (var i = start, ii = 0; i < end; i++, ii++) {
-	    result[ii] = abv[i];
-	  }
-	  return result.buffer;
-	};
-
-
-/***/ },
-/* 57 */
+/* 58 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = after
@@ -8505,7 +9001,7 @@
 
 
 /***/ },
-/* 58 */
+/* 59 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {/**
@@ -8561,7 +9057,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 59 */
+/* 60 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/* WEBPACK VAR INJECTION */(function(module, global) {/*! http://mths.be/utf8js v2.0.0 by @mathias */
@@ -8802,10 +9298,10 @@
 
 	}(this));
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(64)(module), (function() { return this; }())))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(65)(module), (function() { return this; }())))
 
 /***/ },
-/* 60 */
+/* 61 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/*
@@ -8870,7 +9366,7 @@
 
 
 /***/ },
-/* 61 */
+/* 62 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -8878,7 +9374,7 @@
 	 * Module dependencies.
 	 */
 
-	var global = __webpack_require__(67);
+	var global = __webpack_require__(68);
 
 	/**
 	 * Module exports.
@@ -8899,7 +9395,7 @@
 
 
 /***/ },
-/* 62 */
+/* 63 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -8911,7 +9407,7 @@
 	};
 
 /***/ },
-/* 63 */
+/* 64 */
 /***/ function(module, exports, __webpack_require__) {
 
 	
@@ -8960,7 +9456,7 @@
 
 
 /***/ },
-/* 64 */
+/* 65 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = function(module) {
@@ -8976,7 +9472,7 @@
 
 
 /***/ },
-/* 65 */
+/* 66 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -9093,7 +9589,7 @@
 
 
 /***/ },
-/* 66 */
+/* 67 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = Array.isArray || function (arr) {
@@ -9102,7 +9598,7 @@
 
 
 /***/ },
-/* 67 */
+/* 68 */
 /***/ function(module, exports, __webpack_require__) {
 
 	

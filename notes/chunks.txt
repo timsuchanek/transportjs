@@ -1,7 +1,0 @@
-A chunk can look like this:
-
-cb|123|.... Der Rest
-...
-...
-
--> Solange bis alle 123 chunks da sind.

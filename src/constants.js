@@ -3,8 +3,7 @@ module.exports = {
 
   TIMEOUT: 5000,
 
-  HOST: '52.17.22.6',
-  // HOST: 'localhost',
+  HOST: 'localhost',
   PORT: 3000,
 
   // Kademlia Config

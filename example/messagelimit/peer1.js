@@ -1,6 +1,6 @@
-var Transport = require('../../lib/index');
+var Transport = require('../../src/index');
 var ids       = require('../simple/ids');
-var util      = require('../../lib/util');
+var util      = require('../../src/util');
 
 var transport = new Transport(ids[0]);
 

@@ -1,4 +1,4 @@
-var util = require('../lib/util');
+var util = require('../src/util');
 
 var data = 'Lorem ipsum dolor sit amet, consectetur adipisicing elit. Modi nesciunt ex vitae natus ducimus nulla quo sunt exercitationem, illum. Ipsam itaque hic dolor, odio accusantium omnis recusandae repudiandae rerum nihil.';
 
