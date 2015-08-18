@@ -2,7 +2,7 @@ var constants = require('./constants');
 
 
 
-var logging = require('logging').transportjs.util;
+var logging = false;
 
 var monsole = {};
 if (logging === false) {

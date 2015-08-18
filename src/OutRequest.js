@@ -3,7 +3,7 @@ var util  = require('./util');
 var nodeUtil = require('util');
 var EventEmitter = require('eventemitter3');
 
-var logging = require('logging').transportjs.OutRequest;
+var logging = false;
 
 var monsole = {};
 if (logging === false) {

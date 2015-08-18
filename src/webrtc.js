@@ -11,7 +11,7 @@ var registered = false;
 var NODE = false;
 
 
-var logging = require('logging').transportjs.webrtc;
+var logging = false;
 
 var monsole = {};
 if (logging === false) {
