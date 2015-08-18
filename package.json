@@ -1,6 +1,6 @@
 {
   "name": "transportjs",
-  "version": "0.0.5",
+  "version": "0.5",
   "description": "Alternative to Peer.js, works on Node and Browser, Superagent-like API",
   "main": "lib/index.js",
   "scripts": {
